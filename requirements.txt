@@ -1,0 +1,21 @@
+# MemoryBank-Baseline requirements
+# Install: pip install -r requirements.txt
+
+# Core ML / LLM
+torch>=2.0.0
+transformers>=4.40.0
+accelerate>=0.27.0
+sentencepiece
+
+# Embeddings + FAISS
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.4
+
+# Evaluation metrics
+nltk>=3.8.0
+rouge-score>=0.1.3
+bert-score>=0.3.13
+
+# Utilities
+numpy>=1.24.0
+tqdm>=4.65.0
