@@ -7,8 +7,8 @@ BERT-base-uncased embeddings + FAISS (no sentence-transformers needed).
 
 Class: BERTMemoryRetrieval
   - build_and_save_index(persona_id, memory_docs, index_dir)
-  - load_index(persona_id, index_dir) → (faiss_index, texts, dates)
-  - search(query, faiss_index, texts, dates, top_k=3) → List[(text, date)]
+  - load_index(persona_id, index_dir) ? (faiss_index, texts, dates)
+  - search(query, faiss_index, texts, dates, top_k=3) ? List[(text, date)]
 """
 
 import os
@@ -19,15 +19,16 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURATION
-# ─────────────────────────────────────────────
+# ---------------------------------------------
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 EMBEDDING_MODEL = "bert-base-uncased"
-DEFAULT_INDEX_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
+DEFAULT_INDEX_DIR = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 TOP_K = 3
 BATCH_SIZE = 16
 MAX_SEQ_LEN = 512
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 def mean_pool(token_embeddings, attention_mask):
@@ -74,7 +75,7 @@ class BERTMemoryRetrieval:
                 outputs = self.model(**encoded)
 
             embeddings = mean_pool(outputs.last_hidden_state, encoded["attention_mask"])
-            # L2 normalize so inner product ≈ cosine similarity
+            # L2 normalize so inner product ? cosine similarity
             embeddings = F.normalize(embeddings, p=2, dim=1)
             all_embeddings.append(embeddings.cpu().numpy())
 
@@ -112,7 +113,7 @@ class BERTMemoryRetrieval:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump({"texts": texts, "dates": dates}, f, indent=2, ensure_ascii=False)
 
-        print(f"  [{persona_id}] ✅ FAISS index saved → {save_dir}")
+        print(f"  [{persona_id}] [OK] FAISS index saved ? {save_dir}")
         return save_dir
 
     def load_index(self, persona_id, index_dir=DEFAULT_INDEX_DIR):
@@ -187,9 +188,9 @@ class BERTMemoryRetrieval:
         return results
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # Helper: build memory_docs from memory.json
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 def build_memory_docs(persona_memory, persona_id="User"):
     """
@@ -219,11 +220,11 @@ def build_memory_docs(persona_memory, persona_id="User"):
     return docs
 
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # Quick test
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 if __name__ == "__main__":
-    MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
+    MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
 
     with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         memory_dict = json.load(f)

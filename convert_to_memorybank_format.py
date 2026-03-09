@@ -1,5 +1,5 @@
 """
-Step 1: Convert sorted_conversations.json → MemoryBank memory.json format
+Step 1: Convert sorted_conversations.json ? MemoryBank memory.json format
 ==========================================================================
 - Groups conversations by persona_id
 - Sorts by timestamp (chronological order)
@@ -42,18 +42,19 @@ import os
 from collections import defaultdict
 from datetime import datetime
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURATION
-# ─────────────────────────────────────────────
-INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/conversations (2).json"
-OUTPUT_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank"
+# ---------------------------------------------
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+INPUT_FILE  = os.path.join(SCRIPT_DIR, "..", "conversations (2).json")
+OUTPUT_DIR  = os.path.join(SCRIPT_DIR, "memory_bank")
 MEMORY_FILE = os.path.join(OUTPUT_DIR, "memory.json")
-QUERY_FILE = os.path.join(OUTPUT_DIR, "query_set.json")
+QUERY_FILE  = os.path.join(OUTPUT_DIR, "query_set.json")
 
 # For small subset: only use first N personas. Set to None to use ALL.
 N_PERSONAS = None     # Process all 20 personas
 HISTORY_RATIO = 0.8   # (Unused now: 100% overlap logic used below)
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 def extract_date(timestamp_str):
@@ -65,7 +66,7 @@ def turns_to_qa_pairs(turns):
     """
     Convert a list of turns [{"speaker": "User"/"Agent", "utterance": "..."}, ...]
     into MemoryBank format: [{"query": "...", "response": "..."}, ...]
-    Pairs each consecutive User → Agent turn.
+    Pairs each consecutive User ? Agent turn.
     """
     pairs = []
     i = 0
@@ -103,13 +104,13 @@ def personality_to_text(conv):
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # ── Load data ──────────────────────────────────────────
+    # -- Load data ------------------------------------------
     print(f"Loading {INPUT_FILE} ...")
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         all_convs = json.load(f)
     print(f"  Loaded {len(all_convs)} conversations total.")
 
-    # ── Group by persona_id ────────────────────────────────
+    # -- Group by persona_id --------------------------------
     persona_convs = defaultdict(list)
     for conv in all_convs:
         persona_convs[conv["persona_id"]].append(conv)
@@ -122,7 +123,7 @@ def main():
     else:
         print(f"  Using all {len(all_personas)} personas.")
 
-    # ── Build memory.json and query_set.json ───────────────
+    # -- Build memory.json and query_set.json ---------------
     memory_dict = {}
     query_dict = {}
 
@@ -138,9 +139,9 @@ def main():
         query_convs   = [c for c in convs_sorted if c.get("conversation_id", 0) >= 217]
 
         print(f"\n  Persona {persona_id}: {n_total} total convs "
-              f"→ {len(history_convs)} history + {len(query_convs)} query")
+              f"? {len(history_convs)} history + {len(query_convs)} query")
 
-        # ──── Build HISTORY (memory.json format) ────
+        # ---- Build HISTORY (memory.json format) ----
         persona_memory = {
             "history":     {},
             "summary":     {},
@@ -166,7 +167,7 @@ def main():
 
         memory_dict[persona_id] = persona_memory
 
-        # ──── Build QUERY set ────
+        # ---- Build QUERY set ----
         query_items = []
         for conv in query_convs:
             date = extract_date(conv["timestamp"])
@@ -181,10 +182,10 @@ def main():
             })
         query_dict[persona_id] = query_items
 
-    # ── Save outputs ───────────────────────────────────────
+    # -- Save outputs ---------------------------------------
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory_dict, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Saved memory.json → {MEMORY_FILE}")
+    print(f"\n[OK] Saved memory.json ? {MEMORY_FILE}")
     print(f"   Personas in memory: {list(memory_dict.keys())}")
     for pid, pmem in memory_dict.items():
         print(f"   {pid}: {len(pmem['history'])} history dates, "
@@ -192,7 +193,7 @@ def main():
 
     with open(QUERY_FILE, "w", encoding="utf-8") as f:
         json.dump(query_dict, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Saved query_set.json → {QUERY_FILE}")
+    print(f"\n[OK] Saved query_set.json ? {QUERY_FILE}")
     for pid, qitems in query_dict.items():
         print(f"   {pid}: {len(qitems)} query conversations")
 

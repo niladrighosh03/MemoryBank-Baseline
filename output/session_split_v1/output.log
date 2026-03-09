@@ -1,0 +1,219 @@
+[Step 1/2] Running MemoryBank inference (Session Split v1) ...
+Traceback (most recent call last):
+  File "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/run_inference.py", line 53, in <module>
+    from memory_retrieval import BERTMemoryRetrieval
+  File "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_retrieval.py", line 16, in <module>
+    import faiss
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/__init__.py", line 16, in <module>
+    from .loader import *
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/loader.py", line 134, in <module>
+    from .swigfaiss import *
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/swigfaiss.py", line 10, in <module>
+    from . import _swigfaiss
+ImportError: /lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.29' not found (required by /DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/_swigfaiss.so)
+[Step 4/6] Running MemoryBank inference ...
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading memory: /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json
+Loading query set: /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/query_set.json
+
+Running inference for personas: ['P_001', 'P_002', 'P_003', 'P_004', 'P_005', 'P_006', 'P_007', 'P_008', 'P_009', 'P_010', 'P_011', 'P_012', 'P_013', 'P_014', 'P_016', 'P_017', 'P_018', 'P_019', 'P_020', 'P_021', 'P_022', 'P_023', 'P_024', 'P_025', 'P_026', 'P_027', 'P_028', 'P_029', 'P_030', 'P_031', 'P_032', 'P_033', 'P_034', 'P_035', 'P_036', 'P_037', 'P_038', 'P_039', 'P_040', 'P_041', 'P_042', 'P_043', 'P_044', 'P_045', 'P_046', 'P_047', 'P_048', 'P_049', 'P_050', 'P_051', 'P_052', 'P_053', 'P_054', 'P_055', 'P_056', 'P_057']
+Loading BERT embedding model: bert-base-uncased on cuda ...
+  Embedding model loaded.
+Loading Qwen model: Qwen/Qwen2.5-3B-Instruct ...
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:01<00:01,  1.55s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.20s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.25s/it]
+  Model loaded.
+
+
+============================================================
+  Persona: P_001  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-09-23
+  [P_001] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_001: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_002  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-10-21
+  [P_002] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_002: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_003  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-07-30
+  [P_003] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_003: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_004  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-03-23
+  [P_004] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_004: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_005  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-08-10
+  [P_005] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_005: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_006  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-09-28
+  [P_006] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_006: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_007  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-05-21
+  [P_007] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_007: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_008  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-04-17
+  [P_008] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_008: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_009  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-04-08
+  [P_009] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_009: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_010  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-04-14
+  [P_010] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_010: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_011  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-04-04
+  [P_011] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_011: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_012  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-09-20
+  [P_012] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_012: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_013  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-02-12
+  [P_013] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_013: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_014  |  0 query conversations
+============================================================
+  Split: 7 history sessions, 2 query sessions. Query Start Date: 2022-11-25
+  [P_014] Loaded FAISS index: 9 vectors, 9 text chunks.
+
+  ✅ P_014: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_016  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-09-23
+  [P_016] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_016: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_017  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-11-13
+  [P_017] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_017: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_018  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-12-26
+  [P_018] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_018: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_019  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-09-04
+  [P_019] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_019: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_020  |  0 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-02-14
+  [P_020] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  ✅ P_020: 0 conversations processed.
+    Appending to existing results in /DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/session_split_v1/inference_results.json...
+
+============================================================
+  Persona: P_021  |  2 query conversations
+============================================================
+  Split: 8 history sessions, 3 query sessions. Query Start Date: 2023-08-20
+  [P_021] Loaded FAISS index: 11 vectors, 11 text chunks.
+
+  Conv 217 [2024-12-14]  |  18 user turns total
+    Turn 1/18: Can you suggest insurance options for my newly purchased car? [Image: https://t4...
+    Generating ... The following generation flags are not valid and may be ignored: ['top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+[Step 4/6] Running MemoryBank inference ...
+Traceback (most recent call last):
+  File "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/run_inference.py", line 53, in <module>
+    from memory_retrieval import BERTMemoryRetrieval
+  File "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_retrieval.py", line 16, in <module>
+    import faiss
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/__init__.py", line 16, in <module>
+    from .loader import *
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/loader.py", line 134, in <module>
+    from .swigfaiss import *
+  File "/DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/swigfaiss.py", line 10, in <module>
+    from . import _swigfaiss
+ImportError: /lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.29' not found (required by /DATA/rohan_kirti/miniconda3/lib/python3.12/site-packages/faiss/_swigfaiss.so)

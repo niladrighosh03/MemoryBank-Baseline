@@ -5,8 +5,8 @@ Mirrors MemoryBank-SiliconFriend/memory_bank/summarize_memory.py but uses
 Qwen 2.5 3B Instruct (local HuggingFace) instead of OpenAI GPT.
 
 For each persona, for each date in memory.history:
-  - If summary is missing → generate event/topic summary
-  - If personality is missing → generate personality analysis
+  - If summary is missing ? generate event/topic summary
+  - If personality is missing ? generate personality analysis
 
 Then generates:
   - overall_history   : condensed summary across ALL dates
@@ -23,15 +23,16 @@ import torch
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURATION
-# ─────────────────────────────────────────────
-MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
+# ---------------------------------------------
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
 MAX_NEW_TOKENS_SUMMARY = 300
 MAX_NEW_TOKENS_OVERALL = 400
 FORCE_RESUMMARY = False  # Set True to overwrite pre-seeded summaries
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 def load_qwen_model(model_name=MODEL_NAME):
@@ -71,7 +72,7 @@ def qwen_generate(model, tokenizer, system_msg, user_msg, max_new_tokens=300):
     return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
-# ── Prompt builders (from MemoryBank-SiliconFriend prompt logic) ──────────────
+# -- Prompt builders (from MemoryBank-SiliconFriend prompt logic) --------------
 
 SYSTEM_SUMMARIZER = (
     "You are an AI assistant that summarizes conversation content "
@@ -136,7 +137,7 @@ def build_overall_personality_prompt(personalities):
     return prompt
 
 
-# ── Main summarization logic ─────────────────────────────────────────────────
+# -- Main summarization logic -------------------------------------------------
 
 def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
     """
@@ -165,7 +166,7 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
             if not qa_pairs:
                 continue
 
-            # ── Event summary ──────────────────────────────────
+            # -- Event summary ----------------------------------
             already_summarized = (
                 date in persona_mem["summary"] and
                 persona_mem["summary"][date].get("content", "").strip()
@@ -182,7 +183,7 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
                 persona_mem["summary"][date] = {"content": summary_text}
                 print(f"done. [{summary_text[:80]}...]")
 
-            # ── Personality analysis ─────────────────────────────
+            # -- Personality analysis -----------------------------
             already_personality = (
                 date in persona_mem["personality"] and
                 persona_mem["personality"][date].strip()
@@ -199,7 +200,7 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
                 persona_mem["personality"][date] = personality_text
                 print(f"done. [{personality_text[:80]}...]")
 
-        # ── Overall history ──────────────────────────────────────
+        # -- Overall history --------------------------------------
         print(f"\n  [{pid}] Generating overall_history ...", end=" ", flush=True)
         summary_items = list(persona_mem["summary"].items())
         overall_history_prompt = build_overall_history_prompt(summary_items)
@@ -209,7 +210,7 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
         )
         print(f"done.")
 
-        # ── Overall personality ──────────────────────────────────
+        # -- Overall personality ----------------------------------
         print(f"  [{pid}] Generating overall_personality ...", end=" ", flush=True)
         personality_items = list(persona_mem["personality"].items())
         overall_personality_prompt = build_overall_personality_prompt(personality_items)
@@ -219,7 +220,7 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
         )
         print(f"done.")
 
-        print(f"\n  ✅ {pid}: overall_history and overall_personality generated.")
+        print(f"\n  [OK] {pid}: overall_history and overall_personality generated.")
 
     return memory_dict
 
@@ -247,7 +248,7 @@ def main():
     # Save back
     with open(args.memory_file, "w", encoding="utf-8") as f:
         json.dump(memory_dict, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Saved updated memory → {args.memory_file}")
+    print(f"\n[OK] Saved updated memory ? {args.memory_file}")
     print("Next step: run build_memory_index.py")
 
 

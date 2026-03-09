@@ -5,8 +5,8 @@ Mirrors MemoryBank-SiliconFriend/memory_bank/build_memory_index.py but uses
 BERT-base-uncased + FAISS (via memory_retrieval.py) instead of LlamaIndex.
 
 Run this AFTER:
-  1. convert_to_memorybank_format.py   → memory.json exists
-  2. summarize_memory.py               → overall_history / overall_personality filled
+  1. convert_to_memorybank_format.py   ? memory.json exists
+  2. summarize_memory.py               ? overall_history / overall_personality filled
 
 For each persona in memory.json:
   - Converts history + summaries into memory document chunks
@@ -25,13 +25,14 @@ import argparse
 
 from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURATION
-# ─────────────────────────────────────────────
-MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
-INDEX_DIR   = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
+# ---------------------------------------------
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
+INDEX_DIR   = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 EMBEDDING_MODEL = "bert-base-uncased"
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
 def main():
@@ -42,7 +43,7 @@ def main():
     parser.add_argument("--index_dir",   type=str, default=INDEX_DIR)
     args = parser.parse_args()
 
-    # ── Load memory ──────────────────────────────────────────────────
+    # -- Load memory --------------------------------------------------
     print(f"Loading {args.memory_file} ...")
     with open(args.memory_file, "r", encoding="utf-8") as f:
         memory_dict = json.load(f)
@@ -50,10 +51,10 @@ def main():
     personas = [args.persona_id] if args.persona_id else list(memory_dict.keys())
     print(f"Building FAISS index for personas: {personas}")
 
-    # ── Initialize retriever (loads BERT model once) ────────────────
+    # -- Initialize retriever (loads BERT model once) ----------------
     retriever = BERTMemoryRetrieval(model_name=EMBEDDING_MODEL)
 
-    # ── Build index per persona ──────────────────────────────────────
+    # -- Build index per persona --------------------------------------
     for pid in personas:
         if pid not in memory_dict:
             print(f"  [SKIP] {pid} not found in memory.json")
@@ -79,7 +80,7 @@ def main():
 
         # Build and save FAISS index
         save_dir = retriever.build_and_save_index(pid, docs, index_dir=args.index_dir)
-        print(f"  ✅ Index for {pid} saved at: {save_dir}")
+        print(f"  [OK] Index for {pid} saved at: {save_dir}")
 
     print(f"\n{'='*60}")
     print(f"  Done! FAISS indices saved under: {args.index_dir}")

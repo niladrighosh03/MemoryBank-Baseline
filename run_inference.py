@@ -6,7 +6,7 @@ Mirrors MemoryBank-SiliconFriend/SiliconFriend-ChatGPT/cli_llamaindex.py but wit
   - Qwen 2.5 3B Instruct for response generation    (instead of OpenAI GPT)
 
 For each persona's QUERY conversations (from query_set.json):
-  - Iterates through ALL User→Agent turn pairs in each conversation
+  - Iterates through ALL User?Agent turn pairs in each conversation
   - For EACH User turn:
     1. Retrieves top-K related memories from FAISS index strictly BEFORE the conversation date
     2. Builds a system prompt with:
@@ -46,27 +46,31 @@ import json
 import os
 import torch
 import argparse
+import math
+import pandas as pd
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from memory_retrieval import BERTMemoryRetrieval
 
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 # CONFIGURATION
-# ─────────────────────────────────────────────
-MEMORY_FILE    = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
-QUERY_FILE     = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/query_set.json"
-INDEX_DIR      = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
-OUTPUT_DIR     = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output"
+# ---------------------------------------------
+SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE    = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
+QUERY_FILE     = os.path.join(SCRIPT_DIR, "memory_bank", "query_set.json")
+INDEX_DIR      = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
+OUTPUT_DIR     = os.path.join(SCRIPT_DIR, "output", "session_split_v1")
 OUTPUT_FILE    = os.path.join(OUTPUT_DIR, "inference_results.json")
+OUTPUT_CSV     = os.path.join(OUTPUT_DIR, "inference_results.csv")
 
 QWEN_MODEL     = "Qwen/Qwen2.5-3B-Instruct"
 EMBEDDING_MODEL= "bert-base-uncased"
 TOP_K          = 3
 MAX_NEW_TOKENS = 400
-# ─────────────────────────────────────────────
+# ---------------------------------------------
 
 
-# ── System Prompt Template ────────────────────────────────────────────────────
+# -- System Prompt Template ----------------------------------------------------
 # Mirrors MemoryBank-SiliconFriend/utils/prompt_utils.py's meta_prompt
 
 SYSTEM_PROMPT_WITH_MEMORY = """\
@@ -173,10 +177,10 @@ def get_all_qa_pairs(turns):
     return pairs
 
 
-def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer, top_k=TOP_K):
+def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer, top_k=TOP_K, query_start_date="9999-99-99"):
     """
     Run the full MemoryBank baseline inference for one persona.
-    Processes ALL User→Agent turn pairs in each query conversation.
+    Processes ALL User?Agent turn pairs in each query conversation.
 
     Returns list of result dicts (one per query conversation, each with all turns).
     """
@@ -197,10 +201,10 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
         date    = conv["date"]
         turns   = conv["turns"]
 
-        # ── Dynamically build overall history strictly up to 'date' ──
+        # -- Dynamically build overall history strictly up to 'query_start_date' --
         past_histories = []
-        for d, sum_data in persona_mem.get("summary", {}).items():
-            if d < date and sum_data.get("content"):
+        for d, sum_data in sorted(persona_mem.get("summary", {}).items()):
+            if d < query_start_date and sum_data.get("content"):
                 past_histories.append(f"[{d}] {sum_data['content']}")
         
         if past_histories:
@@ -208,7 +212,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
         else:
             overall_history = "No prior conversation history available."
 
-        # ── Extract ALL User→Agent pairs from this conversation ──────
+        # -- Extract ALL User?Agent pairs from this conversation ------
         qa_pairs = get_all_qa_pairs(turns)
         if not qa_pairs:
             print(f"  [SKIP] Conv {conv_id}: no User turns found.")
@@ -220,15 +224,16 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
         for turn_idx, (user_query, ground_truth) in enumerate(qa_pairs):
             print(f"    Turn {turn_idx+1}/{len(qa_pairs)}: {user_query[:80]}...")
 
-            # ── Retrieve relevant memories for THIS user turn ────────
+            # -- Retrieve relevant memories for THIS user turn --------
+            # Restrict retrieval to dates strictly before query_start_date
             if has_index:
-                retrieved = retriever.search(user_query, faiss_index, texts, dates, top_k=top_k, max_date=date)
+                retrieved = retriever.search(user_query, faiss_index, texts, dates, top_k=top_k, max_date=query_start_date)
             else:
                 retrieved = []
 
             retrieved_str = format_retrieved_memories(retrieved)
 
-            # ── Build system prompt ──────────────────────────────────
+            # -- Build system prompt ----------------------------------
             if has_index and retrieved:
                 system_prompt = SYSTEM_PROMPT_WITH_MEMORY.format(
                     overall_personality=overall_personality,
@@ -238,7 +243,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
             else:
                 system_prompt = SYSTEM_PROMPT_NO_MEMORY
 
-            # ── Generate response with Qwen ──────────────────────────
+            # -- Generate response with Qwen --------------------------
             print(f"    Generating ...", end=" ", flush=True)
             generated = qwen_generate(model, tokenizer, system_prompt, user_query)
             print(f"done. [{generated[:80]}...]")
@@ -257,7 +262,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
             "num_turns"       : len(qa_pairs),
             "turns"           : turn_results
         })
-        print(f"  ✅ Conv {conv_id}: {len(turn_results)} turns processed.")
+        print(f"  [OK] Conv {conv_id}: {len(turn_results)} turns processed.")
 
     return results
 
@@ -275,7 +280,7 @@ def main():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # ── Load memory + query data ─────────────────────────────────────
+    # -- Load memory + query data -------------------------------------
     print(f"Loading memory: {args.memory_file}")
     with open(args.memory_file, "r", encoding="utf-8") as f:
         memory_dict = json.load(f)
@@ -287,11 +292,11 @@ def main():
     personas = [args.persona_id] if args.persona_id else list(memory_dict.keys())
     print(f"\nRunning inference for personas: {personas}")
 
-    # ── Load models ─────────────────────────────────────────────────
+    # -- Load models -------------------------------------------------
     retriever = BERTMemoryRetrieval(model_name=EMBEDDING_MODEL)
     model, tokenizer = load_qwen_model()
 
-    # ── Run per-persona inference ────────────────────────────────────
+    # -- Run per-persona inference ------------------------------------
     all_results = {}
     for pid in personas:
         if pid not in memory_dict:
@@ -305,19 +310,34 @@ def main():
         print(f"  Persona: {pid}  |  {len(query_dict[pid])} query conversations")
         print(f"{'='*60}")
 
+        # Identify the 80/20 session-level split to find query_start_date
+        persona_mem = memory_dict[pid]
+        distinct_sessions = sorted(persona_mem.get("history", {}).keys())
+        num_sessions = len(distinct_sessions)
+        num_query = math.ceil(0.2 * num_sessions)
+        num_history = num_sessions - num_query
+        
+        if num_history > 0 and num_history < num_sessions:
+            query_start_date = distinct_sessions[num_history]
+            print(f"  Split: {num_history} history sessions, {num_query} query sessions. Query Start Date: {query_start_date}")
+        else:
+            query_start_date = "9999-99-99"
+            print(f"  Split: Using all as history.")
+
         persona_results = run_inference_for_persona(
             pid,
-            memory_dict[pid],
+            persona_mem,
             query_dict[pid],
             retriever,
             model,
             tokenizer,
-            top_k=args.top_k
+            top_k=args.top_k,
+            query_start_date=query_start_date
         )
         all_results[pid] = persona_results
-        print(f"\n  ✅ {pid}: {len(persona_results)} conversations processed.")
+        print(f"\n  [OK] {pid}: {len(persona_results)} conversations processed.")
 
-        # ── Save results on the go for this persona ──────────────────
+        # -- Save results on the go for this persona ------------------
         if os.path.exists(args.output_file):
             print(f"    Appending to existing results in {args.output_file}...")
             try:
@@ -336,9 +356,29 @@ def main():
         with open(args.output_file, "w", encoding="utf-8") as f:
             json.dump(final_results, f, indent=2, ensure_ascii=False)
 
+    # -- Final Save: Flatten to CSV -------------------------
+    print(f"\nFinalizing outputs ...")
+    csv_rows = []
+    for pid, persona_convs in all_results.items():
+        for conv in persona_convs:
+            conv_id = conv["conversation_id"]
+            for turn in conv["turns"]:
+                csv_rows.append({
+                    "Persona Id": pid,
+                    "conversation id": conv_id,
+                    "turn index": turn["turn_index"],
+                    "ground response": turn["ground_truth_response"],
+                    "generated response": turn["generated_response"]
+                })
+    
+    if csv_rows:
+        df = pd.DataFrame(csv_rows)
+        df.to_csv(OUTPUT_CSV, index=False)
+        print(f"   CSV results saved ? {OUTPUT_CSV}")
+
     print(f"\n{'='*60}")
-    print(f"✅ Inference complete!")
-    print(f"   Results saved → {args.output_file}")
+    print(f"[OK] Inference complete!")
+    print(f"   Results saved ? {args.output_file}")
     print(f"   Next step: run evaluate.py to compute BLEU / BERTScore")
     print(f"{'='*60}")
 

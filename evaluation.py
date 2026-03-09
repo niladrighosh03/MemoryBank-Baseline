@@ -11,9 +11,10 @@ from datetime import datetime
 from bert_score import score
 
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
-INPUT_CSV_PATH = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/inference_results.csv"
-OUTPUT_CSV_PATH = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/evaluation.csv"
+INPUT_CSV_PATH = os.path.join(SCRIPT_DIR, "output", "session_split_v1", "inference_results.csv")
+OUTPUT_CSV_PATH = os.path.join(SCRIPT_DIR, "output", "session_split_v1", "evaluation.csv")
 
 # --- Metric Definitions ---
 

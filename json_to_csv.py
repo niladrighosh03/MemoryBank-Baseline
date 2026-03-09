@@ -2,8 +2,9 @@ import json
 import csv
 import os
 
-INPUT_JSON = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/inference_results.json"
-OUTPUT_CSV = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/inference_results.csv"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_JSON = os.path.join(SCRIPT_DIR, "output", "inference_results.json")
+OUTPUT_CSV = os.path.join(SCRIPT_DIR, "output", "inference_results.csv")
 
 def main():
     if not os.path.exists(INPUT_JSON):
