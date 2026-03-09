@@ -45,7 +45,7 @@ from datetime import datetime
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/sorted_conversations.json"
+INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/conversations (2).json"
 OUTPUT_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank"
 MEMORY_FILE = os.path.join(OUTPUT_DIR, "memory.json")
 QUERY_FILE = os.path.join(OUTPUT_DIR, "query_set.json")
@@ -135,10 +135,10 @@ def main():
 
         # Put 100% of conversations in both history and query sets
         history_convs = convs_sorted
-        query_convs   = convs_sorted
+        query_convs   = [c for c in convs_sorted if c.get("conversation_id", 0) >= 217]
 
         print(f"\n  Persona {persona_id}: {n_total} total convs "
-              f"→ {len(history_convs)} history + {len(query_convs)} query (100% overlap)")
+              f"→ {len(history_convs)} history + {len(query_convs)} query")
 
         # ──── Build HISTORY (memory.json format) ────
         persona_memory = {

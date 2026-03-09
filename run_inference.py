@@ -317,9 +317,24 @@ def main():
         all_results[pid] = persona_results
         print(f"\n  ✅ {pid}: {len(persona_results)} conversations processed.")
 
-    # ── Save results ─────────────────────────────────────────────────
-    with open(args.output_file, "w", encoding="utf-8") as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False)
+        # ── Save results on the go for this persona ──────────────────
+        if os.path.exists(args.output_file):
+            print(f"    Appending to existing results in {args.output_file}...")
+            try:
+                with open(args.output_file, "r", encoding="utf-8") as f:
+                    existing_results = json.load(f)
+            except Exception:
+                existing_results = {}
+            if pid not in existing_results:
+                existing_results[pid] = persona_results
+            else:
+                existing_results[pid].extend(persona_results)
+            final_results = existing_results
+        else:
+            final_results = all_results.copy()
+
+        with open(args.output_file, "w", encoding="utf-8") as f:
+            json.dump(final_results, f, indent=2, ensure_ascii=False)
 
     print(f"\n{'='*60}")
     print(f"✅ Inference complete!")

@@ -98,16 +98,32 @@ def main():
 
     df = pd.read_csv(INPUT_CSV_PATH)
 
-    df['PPL'] = 0.0
-    df['BLEU-2'] = 0.0
-    df['BERTScore-F1'] = 0.0
-    df['Distinct-2'] = 0.0
-    df['ROUGE-1'] = 0.0
-    df['METEOR'] = 0.0
+    # Initialize columns with NaN
+    metrics = ['PPL', 'BLEU-2', 'BERTScore-F1', 'Distinct-2', 'ROUGE-1', 'METEOR']
+    for m in metrics:
+        df[m] = np.nan
+
+    # Resume from existing evaluation.csv if it exists
+    import os
+    if os.path.exists(OUTPUT_CSV_PATH):
+        try:
+            old_df = pd.read_csv(OUTPUT_CSV_PATH)
+            # Use 'Persona Id', 'conversation id', 'turn index' to merge
+            if all(col in old_df.columns for col in ['Persona Id', 'conversation id', 'turn index']):
+                old_df_indexed = old_df.set_index(['Persona Id', 'conversation id', 'turn index'])
+                df_indexed = df.set_index(['Persona Id', 'conversation id', 'turn index'])
+                df_indexed.update(old_df_indexed)
+                df = df_indexed.reset_index()
+        except Exception as e:
+            print(f"Could not load existing {OUTPUT_CSV_PATH}: {e}")
 
     start_time = datetime.now()
 
     for i in range(len(df)):
+        # Skip if already evaluated
+        if not pd.isna(df.loc[i, 'PPL']) and df.loc[i, 'PPL'] > 0:
+            continue
+            
         agent_reply = str(df.loc[i, 'ground response'])
         model_reply = str(df.loc[i, 'generated response'])
 
