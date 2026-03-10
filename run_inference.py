@@ -318,8 +318,13 @@ def main():
         print(f"\n  ✅ {pid}: {len(persona_results)} conversations processed.")
 
     # ── Save results ─────────────────────────────────────────────────
+    # Sort results by conversation_id for each persona
+    sorted_all_results = {}
+    for pid, results in all_results.items():
+        sorted_all_results[pid] = sorted(results, key=lambda x: x.get("conversation_id", 0))
+
     with open(args.output_file, "w", encoding="utf-8") as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False)
+        json.dump(sorted_all_results, f, indent=2, ensure_ascii=False)
 
     print(f"\n{'='*60}")
     print(f"✅ Inference complete!")

@@ -45,14 +45,13 @@ from datetime import datetime
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/sorted_conversations.json"
+INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/conversations (2).json"
 OUTPUT_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank"
 MEMORY_FILE = os.path.join(OUTPUT_DIR, "memory.json")
 QUERY_FILE = os.path.join(OUTPUT_DIR, "query_set.json")
 
 # For small subset: only use first N personas. Set to None to use ALL.
-N_PERSONAS = None     # Process all 20 personas
-HISTORY_RATIO = 0.8   # (Unused now: 100% overlap logic used below)
+N_PERSONAS = None     # Process all personas
 # ─────────────────────────────────────────────
 
 
@@ -131,14 +130,26 @@ def main():
 
         # Sort chronologically by timestamp
         convs_sorted = sorted(convs, key=lambda c: c["timestamp"])
-        n_total = len(convs_sorted)
+        
+        # Group by year
+        year_to_convs = defaultdict(list)
+        for c in convs_sorted:
+            year_to_convs[c.get("year")].append(c)
+        
+        sorted_years = sorted(year_to_convs.keys())
+        n_years = len(sorted_years)
+        
+        # 80% (floor) for memory, rest for query
+        n_memory_years = int(n_years * 0.8)
+        
+        memory_years = sorted_years[:n_memory_years]
+        query_years = sorted_years[n_memory_years:]
+        
+        history_convs = [c for y in memory_years for c in year_to_convs[y]]
+        query_convs   = [c for y in query_years for c in year_to_convs[y]]
 
-        # Put 100% of conversations in both history and query sets
-        history_convs = convs_sorted
-        query_convs   = convs_sorted
-
-        print(f"\n  Persona {persona_id}: {n_total} total convs "
-              f"→ {len(history_convs)} history + {len(query_convs)} query (100% overlap)")
+        print(f"\n  Persona {persona_id}: {n_years} years total ({len(convs_sorted)} convs)")
+        print(f"    Memory: {len(memory_years)} years ({len(history_convs)} convs) | Query: {len(query_years)} years ({len(query_convs)} convs)")
 
         # ──── Build HISTORY (memory.json format) ────
         persona_memory = {
@@ -154,7 +165,9 @@ def main():
                 continue
 
             # history: raw dialogue pairs
-            persona_memory["history"][date] = qa_pairs
+            if date not in persona_memory["history"]:
+                persona_memory["history"][date] = []
+            persona_memory["history"][date].extend(qa_pairs)
 
             # summary: pre-seed from year_summary (skip LLM summarization later if present)
             year_summary = conv.get("year_summary", "").strip()
