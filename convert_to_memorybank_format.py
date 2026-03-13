@@ -46,7 +46,7 @@ from datetime import datetime
 # CONFIGURATION
 # ─────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_FILE = os.path.join(SCRIPT_DIR, "..", "conversations (2).json")
+INPUT_FILE = os.path.join(SCRIPT_DIR, "..", "sorted_conversations.json")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "memory_bank")
 MEMORY_FILE = os.path.join(OUTPUT_DIR, "memory.json")
 QUERY_FILE = os.path.join(OUTPUT_DIR, "query_set.json")

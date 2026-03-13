@@ -47,6 +47,8 @@ python build_memory_index.py
 echo ""
 
 # ── Step 4: Run inference ─────────────────────────────────────
+# To enable the Ebbinghaus Forgetting Curve, add --enable_forgetting flag:
+#   python run_inference.py --top_k 3 --enable_forgetting
 echo "[Step 4/6] Running MemoryBank inference ..."
 python run_inference.py --top_k 3
 echo ""

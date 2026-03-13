@@ -4,6 +4,7 @@ Step 5: Run MemoryBank Inference using Qwen 2.5 3B Instruct
 Mirrors MemoryBank-SiliconFriend/SiliconFriend-ChatGPT/cli_llamaindex.py but with:
   - BERT-base-uncased + FAISS for memory retrieval  (instead of LlamaIndex)
   - Qwen 2.5 3B Instruct for response generation    (instead of OpenAI GPT)
+  - (Optional) Ebbinghaus Forgetting Curve memory management via --enable_forgetting
 
 For each persona's QUERY conversations (from query_set.json):
   - Iterates through ALL User→Agent turn pairs in each conversation
@@ -17,9 +18,10 @@ For each persona's QUERY conversations (from query_set.json):
   - Saves results to output/inference_results.json
 
 CLI:
-  python run_inference.py                       # all personas
-  python run_inference.py --persona_id P_001    # single persona
-  python run_inference.py --top_k 5             # retrieve top 5 memories
+  python run_inference.py                            # all personas
+  python run_inference.py --persona_id P_001         # single persona
+  python run_inference.py --top_k 5                  # retrieve top 5 memories
+  python run_inference.py --enable_forgetting        # apply Ebbinghaus forgetting
 
 Output format (inference_results.json):
 {
@@ -49,6 +51,7 @@ import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from memory_retrieval import BERTMemoryRetrieval
+from forget_utility import MemoryForgetter
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -71,8 +74,7 @@ MAX_NEW_TOKENS = 400
 # Mirrors MemoryBank-SiliconFriend/utils/prompt_utils.py's meta_prompt
 
 SYSTEM_PROMPT_WITH_MEMORY = """\
-You are a professional insurance sales agent. You assist users in finding the \
-best motor insurance policies based on their needs and budget.
+You are a professional insurance sales agent. You assist users in finding the best insurance.
 
 You have access to this user's past interaction history:
 
@@ -92,7 +94,7 @@ personalized, and empathetic insurance recommendation. Refer to past context whe
 
 SYSTEM_PROMPT_NO_MEMORY = """\
 You are a professional insurance sales agent. You assist users in finding the \
-best motor insurance policies based on their needs and budget.
+best insurance policies based on their needs and budget.
 Provide a helpful, personalized, and empathetic insurance recommendation.\
 """
 
@@ -174,10 +176,14 @@ def get_all_qa_pairs(turns):
     return pairs
 
 
-def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer, top_k=TOP_K):
+def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer,
+                              top_k=TOP_K, forgetter: MemoryForgetter = None):
     """
     Run the full MemoryBank baseline inference for one persona.
     Processes ALL User→Agent turn pairs in each query conversation.
+
+    If forgetter is a MemoryForgetter instance, applies the Ebbinghaus forgetting
+    curve before each new date and reinforces memories after each retrieval.
 
     Returns list of result dicts (one per query conversation, each with all turns).
     """
@@ -192,11 +198,20 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
 
     overall_personality = persona_mem.get("overall_personality", "No personality profile available.")
 
+    # Track which date we have already applied forgetting for (avoid double-applying per date)
+    forgetting_applied_for_dates = set()
+
     results = []
     for conv in query_convs:
         conv_id = conv["conversation_id"]
         date    = conv["date"]
         turns   = conv["turns"]
+
+        # ── Apply Ebbinghaus forgetting (once per new date, in chronological order) ──
+        if forgetter is not None and date not in forgetting_applied_for_dates:
+            print(f"\n  [FORGETTING] Applying forgetting curve for date={date} (pid={pid}) ...")
+            forgetter.apply_forgetting(cur_date=date)
+            forgetting_applied_for_dates.add(date)
 
         # ── Dynamically build overall history strictly up to 'date' ──
         past_histories = []
@@ -224,6 +239,9 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
             # ── Retrieve relevant memories for THIS user turn ────────
             if has_index:
                 retrieved = retriever.search(user_query, faiss_index, texts, dates, top_k=top_k, max_date=date)
+                # Reinforce recalled memories (Ebbinghaus: recall strengthens memory)
+                if forgetter is not None and retrieved:
+                    forgetter.update_on_recall(retrieved, cur_date=date)
             else:
                 retrieved = []
 
@@ -272,6 +290,10 @@ def main():
     parser.add_argument("--query_file",  type=str, default=QUERY_FILE)
     parser.add_argument("--index_dir",   type=str, default=INDEX_DIR)
     parser.add_argument("--output_file", type=str, default=OUTPUT_FILE)
+    parser.add_argument("--enable_forgetting", action="store_true", default=False,
+                        help="Apply Ebbinghaus Forgetting Curve during inference. "
+                             "Weaker/older memories will be probabilistically removed, "
+                             "and retrieved memories will be reinforced.")
     args = parser.parse_args()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -292,6 +314,15 @@ def main():
     retriever = BERTMemoryRetrieval(model_name=EMBEDDING_MODEL)
     model, tokenizer = load_qwen_model()
 
+    # ── Initialise MemoryForgetter if enabled ───────────────────────
+    forgetter = None
+    if args.enable_forgetting:
+        print("\n⚡ Ebbinghaus Forgetting Curve ENABLED ─ memories will fade over time.")
+        forgetter = MemoryForgetter(memory_file=args.memory_file)
+        forgetter.load_memories()   # loads & holds state in forgetter.memory_bank
+    else:
+        print("\nℹ️  Ebbinghaus Forgetting Curve DISABLED (use --enable_forgetting to activate).")
+
     # ── Run per-persona inference ────────────────────────────────────
     all_results = {}
     for pid in personas:
@@ -306,17 +337,26 @@ def main():
         print(f"  Persona: {pid}  |  {len(query_dict[pid])} query conversations")
         print(f"{'='*60}")
 
+        # Sort query conversations chronologically so forgetting is applied in order
+        sorted_query_convs = sorted(query_dict[pid], key=lambda c: c.get("date", ""))
+
         persona_results = run_inference_for_persona(
             pid,
             memory_dict[pid],
-            query_dict[pid],
+            sorted_query_convs,
             retriever,
             model,
             tokenizer,
-            top_k=args.top_k
+            top_k=args.top_k,
+            forgetter=forgetter   # None if forgetting is disabled
         )
         all_results[pid] = persona_results
         print(f"\n  ✅ {pid}: {len(persona_results)} conversations processed.")
+
+    # ── Persist updated memory state (if forgetting was active) ─────
+    if forgetter is not None:
+        forgetter.write_memories()
+        print("\n📝 Updated memory (with forgetting & reinforcement) saved back to disk.")
 
     # ── Save results ─────────────────────────────────────────────────
     # Sort results by conversation_id for each persona
