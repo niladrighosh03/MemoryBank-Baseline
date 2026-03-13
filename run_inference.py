@@ -53,10 +53,11 @@ from memory_retrieval import BERTMemoryRetrieval
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-MEMORY_FILE    = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
-QUERY_FILE     = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/query_set.json"
-INDEX_DIR      = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
-OUTPUT_DIR     = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output"
+SCRIPT_DIR     = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE    = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
+QUERY_FILE     = os.path.join(SCRIPT_DIR, "memory_bank", "query_set.json")
+INDEX_DIR      = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
+OUTPUT_DIR     = os.path.join(SCRIPT_DIR, "output")
 OUTPUT_FILE    = os.path.join(OUTPUT_DIR, "inference_results.json")
 
 QWEN_MODEL     = "Qwen/Qwen2.5-3B-Instruct"

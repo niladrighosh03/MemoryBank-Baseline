@@ -14,7 +14,7 @@
 
 set -e  # exit on any error
 
-BASE_DIR="/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
 mkdir -p output
@@ -47,18 +47,24 @@ python build_memory_index.py
 echo ""
 
 # ── Step 4: Run inference ─────────────────────────────────────
-echo "[Step 4/5] Running MemoryBank inference ..."
+echo "[Step 4/6] Running MemoryBank inference ..."
 python run_inference.py --top_k 3
 echo ""
 
-# ── Step 5: Evaluate ─────────────────────────────────────────
-echo "[Step 5/5] Evaluating results (BLEU / ROUGE / BERTScore) ..."
+# ── Step 5: Convert JSON to CSV for evaluation ───────────────
+echo "[Step 5/6] Converting inference_results.json → CSV ..."
+python json_to_csv.py
+echo ""
+
+# ── Step 6: Evaluate ─────────────────────────────────────────
+echo "[Step 6/6] Evaluating results (BLEU / ROUGE / BERTScore) ..."
 python evaluation.py
 echo ""
 
 echo "============================================================"
 echo "  Pipeline complete!"
 echo "  Results: $BASE_DIR/output/inference_results.json"
-echo "  Metrics: $BASE_DIR/output/evaluation_results.json"
+echo "  CSV Data: $BASE_DIR/output/inference_results.csv"
+echo "  Metrics: $BASE_DIR/output/evaluation.csv"
 echo "============================================================"
 } 2>&1 | tee -a "$LOG_FILE"

@@ -10,10 +10,12 @@ from rouge_score import rouge_scorer
 from datetime import datetime
 from bert_score import score
 
+import os
 
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
-INPUT_CSV_PATH = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/inference_results.csv"
-OUTPUT_CSV_PATH = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/output/evaluation.csv"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_CSV_PATH = os.path.join(SCRIPT_DIR, "output", "inference_results.csv")
+OUTPUT_CSV_PATH = os.path.join(SCRIPT_DIR, "output", "evaluation.csv")
 
 # --- Metric Definitions ---
 

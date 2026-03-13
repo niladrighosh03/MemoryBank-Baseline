@@ -1,3 +1,4 @@
 __pycache__
 output/
-MemoryBank-Baseline/output
+MemoryBank-Baseline/output/*.json
+MemoryBank-Baseline/memory_bank/faiss_index

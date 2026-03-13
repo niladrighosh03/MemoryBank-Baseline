@@ -26,7 +26,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
 MAX_NEW_TOKENS_SUMMARY = 300
 MAX_NEW_TOKENS_OVERALL = 400

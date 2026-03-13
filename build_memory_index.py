@@ -28,8 +28,9 @@ from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
-INDEX_DIR   = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
+INDEX_DIR   = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 EMBEDDING_MODEL = "bert-base-uncased"
 # ─────────────────────────────────────────────
 

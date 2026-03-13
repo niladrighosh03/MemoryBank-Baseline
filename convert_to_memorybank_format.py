@@ -45,8 +45,9 @@ from datetime import datetime
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
-INPUT_FILE = "/DATA/rohan_kirti/niladri2/baselines/conversations (2).json"
-OUTPUT_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_FILE = os.path.join(SCRIPT_DIR, "..", "conversations (2).json")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "memory_bank")
 MEMORY_FILE = os.path.join(OUTPUT_DIR, "memory.json")
 QUERY_FILE = os.path.join(OUTPUT_DIR, "query_set.json")
 

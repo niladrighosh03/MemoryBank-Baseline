@@ -22,8 +22,9 @@ from transformers import AutoTokenizer, AutoModel
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 EMBEDDING_MODEL = "bert-base-uncased"
-DEFAULT_INDEX_DIR = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/faiss_index"
+DEFAULT_INDEX_DIR = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 TOP_K = 3
 BATCH_SIZE = 16
 MAX_SEQ_LEN = 512
@@ -223,7 +224,8 @@ def build_memory_docs(persona_memory, persona_id="User"):
 # Quick test
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    MEMORY_FILE = "/DATA/rohan_kirti/niladri2/baselines/MemoryBank-Baseline/memory_bank/memory.json"
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
 
     with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         memory_dict = json.load(f)
