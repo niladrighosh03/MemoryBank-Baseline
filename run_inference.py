@@ -50,8 +50,64 @@ import torch
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from memory_retrieval import BERTMemoryRetrieval
+from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
 from forget_utility import MemoryForgetter
+from summarize_memory import (
+    SYSTEM_SUMMARIZER,
+    build_event_summary_prompt,
+    build_personality_prompt,
+    build_overall_history_prompt,
+    build_overall_personality_prompt,
+)
+
+
+# ─────────────────────────────────────────────
+# INCREMENTAL OUTPUT HELPER
+# ─────────────────────────────────────────────
+
+def write_result_incremental(output_file: str, pid: str, conv_result: dict) -> None:
+    """
+    Append a single conversation result to the output JSON immediately.
+
+    Behaviour:
+      - Loads existing output JSON from disk (if present).
+      - Merges the new conversation result under the persona key.
+      - Keeps ALL conversations sorted by conversation_id.
+      - Writes atomically (write to tmp then rename) so no partial files.
+
+    Args:
+        output_file  (str):  Path to inference_results.json.
+        pid          (str):  Persona ID, e.g. "P_001".
+        conv_result  (dict): The single conversation result dict (has conversation_id etc.).
+    """
+    # Load existing results (or start fresh)
+    if os.path.exists(output_file):
+        with open(output_file, "r", encoding="utf-8") as f:
+            try:
+                existing = json.load(f)
+            except json.JSONDecodeError:
+                existing = {}
+    else:
+        existing = {}
+
+    # Merge new result
+    if pid not in existing:
+        existing[pid] = []
+
+    # Replace if conversation_id already present (idempotent / resume-safe)
+    conv_id = conv_result["conversation_id"]
+    existing[pid] = [c for c in existing[pid] if c.get("conversation_id") != conv_id]
+    existing[pid].append(conv_result)
+
+    # Sort by conversation_id (ascending) for readability
+    existing[pid] = sorted(existing[pid], key=lambda x: x.get("conversation_id", 0))
+
+    # Atomic write: write to tmp file then rename
+    tmp_file = output_file + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(existing, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_file, output_file)
+    print(f"  [SAVED] Conv {conv_id} written → {output_file}")
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -145,6 +201,112 @@ def format_retrieved_memories(retrieved):
     return "\n".join(lines)
 
 
+def build_temporal_memory_context(persona_mem, cur_date, model, tokenizer):
+    """
+    Build date-consistent global summaries using ONLY memory strictly before cur_date.
+    """
+    past_summaries = []
+    for date, summary_entry in sorted(persona_mem.get("summary", {}).items()):
+        if date >= cur_date or not isinstance(summary_entry, dict):
+            continue
+        content = summary_entry.get("content", "").strip()
+        if content:
+            past_summaries.append((date, summary_entry))
+
+    past_personalities = []
+    for date, personality_text in sorted(persona_mem.get("personality", {}).items()):
+        if date >= cur_date:
+            continue
+        if isinstance(personality_text, str) and personality_text.strip():
+            past_personalities.append((date, personality_text))
+
+    overall_history = "No prior conversation history available."
+    if past_summaries:
+        overall_history = qwen_generate(
+            model,
+            tokenizer,
+            SYSTEM_SUMMARIZER,
+            build_overall_history_prompt(past_summaries),
+        )
+
+    overall_personality = "No personality profile available."
+    if past_personalities:
+        overall_personality = qwen_generate(
+            model,
+            tokenizer,
+            SYSTEM_SUMMARIZER,
+            build_overall_personality_prompt(past_personalities),
+        )
+
+    return overall_history, overall_personality
+
+
+def update_memory_with_generated_conversation(persona_mem, pid, date, turn_results, model, tokenizer):
+    """
+    Add generated conversation turns to memory storage and regenerate the date summary/profile.
+    """
+    if "history" not in persona_mem:
+        persona_mem["history"] = {}
+    if "summary" not in persona_mem:
+        persona_mem["summary"] = {}
+    if "personality" not in persona_mem:
+        persona_mem["personality"] = {}
+
+    date_history = persona_mem["history"].setdefault(date, [])
+    existing_count = len(date_history)
+
+    new_entries = []
+    for offset, turn in enumerate(turn_results):
+        new_entries.append({
+            "query": turn["user_query"],
+            "response": turn["generated_response"],
+            "memory_strength": 1,
+            "last_recall_date": date,
+            "memory_id": f"{pid}_{date}_{existing_count + offset}",
+        })
+    date_history.extend(new_entries)
+
+    persona_mem["summary"][date] = {
+        "content": qwen_generate(
+            model,
+            tokenizer,
+            SYSTEM_SUMMARIZER,
+            build_event_summary_prompt(date, date_history),
+        ),
+        "memory_strength": 1,
+        "last_recall_date": date,
+        "memory_id": f"{pid}_{date}_summary",
+    }
+
+    persona_mem["personality"][date] = qwen_generate(
+        model,
+        tokenizer,
+        SYSTEM_SUMMARIZER,
+        build_personality_prompt(date, date_history),
+    )
+
+    summary_entry = persona_mem["summary"][date]
+    new_memory_docs = []
+    for entry in new_entries:
+        new_memory_docs.append({
+            "text": (
+                f"Conversation on {date}:\n"
+                f"[User]: {entry['query'].strip()}\n"
+                f"[Agent]: {entry['response'].strip()}"
+            ),
+            "date": date,
+            "memory_id": entry["memory_id"],
+        })
+
+    new_memory_docs.append({
+        "text": f"Summary of {date}: {summary_entry['content'].strip()}",
+        "date": date,
+        "memory_id": summary_entry["memory_id"],
+    })
+
+    return new_memory_docs
+
+
 def get_all_qa_pairs(turns):
     """
     Extract ALL (User utterance, Agent response) pairs from a multi-turn conversation.
@@ -177,10 +339,14 @@ def get_all_qa_pairs(turns):
 
 
 def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer,
-                              top_k=TOP_K, forgetter: MemoryForgetter = None):
+                              top_k=TOP_K, forgetter: MemoryForgetter = None,
+                              output_file: str = None, index_dir: str = INDEX_DIR):
     """
     Run the full MemoryBank baseline inference for one persona.
     Processes ALL User→Agent turn pairs in each query conversation.
+
+    Each conversation result is written to output_file immediately after
+    completion (incremental write), sorted by conversation_id.
 
     If forgetter is a MemoryForgetter instance, applies the Ebbinghaus forgetting
     curve before each new date and reinforces memories after each retrieval.
@@ -189,17 +355,32 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
     """
     # Load persona's FAISS index
     try:
-        faiss_index, texts, dates = retriever.load_index(pid)
+        faiss_index, texts, dates, memory_ids = retriever.load_index(pid)
         has_index = True
     except FileNotFoundError as e:
         print(f"  [WARNING] {e}")
-        print(f"  Falling back to no-memory generation for {pid}.")
-        has_index = False
+        docs = build_memory_docs(persona_mem, pid)
+        if docs:
+            print(f"  Building runtime index for {pid} from current memory.")
+            retriever.build_and_save_index(pid, docs, index_dir=index_dir)
+            faiss_index, texts, dates, memory_ids = retriever.load_index(pid, index_dir=index_dir)
+            has_index = True
+        else:
+            print(f"  Falling back to no-memory generation for {pid}.")
+            has_index = False
+            memory_ids = []
 
-    overall_personality = persona_mem.get("overall_personality", "No personality profile available.")
+    if forgetter is not None and has_index and any(memory_id is None for memory_id in memory_ids):
+        raise ValueError(
+            f"FAISS metadata for {pid} is missing memory_ids. "
+            "Rebuild the index with build_memory_index.py before using --enable_forgetting."
+        )
 
     # Track which date we have already applied forgetting for (avoid double-applying per date)
     forgetting_applied_for_dates = set()
+    active_persona_mem = forgetter.get_persona_memory(pid) if forgetter is not None else persona_mem
+    pending_memory_docs = []
+    previous_date = None
 
     results = []
     for conv in query_convs:
@@ -207,22 +388,23 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
         date    = conv["date"]
         turns   = conv["turns"]
 
+        if previous_date is not None and date != previous_date and pending_memory_docs:
+            retriever.add_documents(faiss_index, texts, dates, memory_ids, pending_memory_docs)
+            pending_memory_docs = []
+
         # ── Apply Ebbinghaus forgetting (once per new date, in chronological order) ──
         if forgetter is not None and date not in forgetting_applied_for_dates:
             print(f"\n  [FORGETTING] Applying forgetting curve for date={date} (pid={pid}) ...")
-            forgetter.apply_forgetting(cur_date=date)
+            forgetter.apply_forgetting(cur_date=date, persona_id=pid)
             forgetting_applied_for_dates.add(date)
 
-        # ── Dynamically build overall history strictly up to 'date' ──
-        past_histories = []
-        for d, sum_data in persona_mem.get("summary", {}).items():
-            if d < date and sum_data.get("content"):
-                past_histories.append(f"[{d}] {sum_data['content']}")
-        
-        if past_histories:
-            overall_history = "\n".join(past_histories)
-        else:
-            overall_history = "No prior conversation history available."
+        current_persona_mem = forgetter.get_persona_memory(pid) if forgetter is not None else persona_mem
+        overall_history, overall_personality = build_temporal_memory_context(
+            current_persona_mem,
+            date,
+            model,
+            tokenizer,
+        )
 
         # ── Extract ALL User→Agent pairs from this conversation ──────
         qa_pairs = get_all_qa_pairs(turns)
@@ -238,10 +420,23 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
 
             # ── Retrieve relevant memories for THIS user turn ────────
             if has_index:
-                retrieved = retriever.search(user_query, faiss_index, texts, dates, top_k=top_k, max_date=date)
+                allowed_memory_ids = None
+                if forgetter is not None:
+                    allowed_memory_ids = forgetter.get_active_memory_ids(pid, max_date=date)
+
+                retrieved = retriever.search(
+                    user_query,
+                    faiss_index,
+                    texts,
+                    dates,
+                    memory_ids=memory_ids,
+                    top_k=top_k,
+                    max_date=date,
+                    allowed_memory_ids=allowed_memory_ids,
+                )
                 # Reinforce recalled memories (Ebbinghaus: recall strengthens memory)
                 if forgetter is not None and retrieved:
-                    forgetter.update_on_recall(retrieved, cur_date=date)
+                    forgetter.update_on_recall(retrieved, cur_date=date, persona_id=pid)
             else:
                 retrieved = []
 
@@ -270,13 +465,36 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
                 "generated_response"    : generated
             })
 
-        results.append({
+        conv_result = {
             "conversation_id" : conv_id,
             "date"            : date,
             "num_turns"       : len(qa_pairs),
             "turns"           : turn_results
-        })
+        }
+        results.append(conv_result)
         print(f"  ✅ Conv {conv_id}: {len(turn_results)} turns processed.")
+
+        # ── Update memory storage with the generated conversation ────────────
+        new_memory_docs = update_memory_with_generated_conversation(
+            current_persona_mem,
+            pid,
+            date,
+            turn_results,
+            model,
+            tokenizer,
+        )
+        pending_memory_docs.extend(new_memory_docs)
+
+        # ── Incremental write: save immediately, sorted by conversation_id ───
+        if output_file:
+            write_result_incremental(output_file, pid, conv_result)
+
+        previous_date = date
+
+    if has_index:
+        if pending_memory_docs:
+            retriever.add_documents(faiss_index, texts, dates, memory_ids, pending_memory_docs)
+        retriever.save_runtime_index(pid, faiss_index, texts, dates, memory_ids, index_dir=index_dir)
 
     return results
 
@@ -292,7 +510,7 @@ def main():
     parser.add_argument("--output_file", type=str, default=OUTPUT_FILE)
     parser.add_argument("--enable_forgetting", action="store_true", default=False,
                         help="Apply Ebbinghaus Forgetting Curve during inference. "
-                             "Weaker/older memories will be probabilistically removed, "
+                             "Weaker/older memories will be deterministically removed, "
                              "and retrieved memories will be reinforced.")
     args = parser.parse_args()
 
@@ -348,24 +566,20 @@ def main():
             model,
             tokenizer,
             top_k=args.top_k,
-            forgetter=forgetter   # None if forgetting is disabled
+            forgetter=forgetter,       # None if forgetting is disabled
+            output_file=args.output_file,  # write after each conversation
+            index_dir=args.index_dir,
         )
-        all_results[pid] = persona_results
         print(f"\n  ✅ {pid}: {len(persona_results)} conversations processed.")
 
     # ── Persist updated memory state (if forgetting was active) ─────
     if forgetter is not None:
         forgetter.write_memories()
         print("\n📝 Updated memory (with forgetting & reinforcement) saved back to disk.")
-
-    # ── Save results ─────────────────────────────────────────────────
-    # Sort results by conversation_id for each persona
-    sorted_all_results = {}
-    for pid, results in all_results.items():
-        sorted_all_results[pid] = sorted(results, key=lambda x: x.get("conversation_id", 0))
-
-    with open(args.output_file, "w", encoding="utf-8") as f:
-        json.dump(sorted_all_results, f, indent=2, ensure_ascii=False)
+    else:
+        with open(args.memory_file, "w", encoding="utf-8") as f:
+            json.dump(memory_dict, f, indent=2, ensure_ascii=False)
+        print("\n📝 Updated memory (with generated conversations) saved back to disk.")
 
     print(f"\n{'='*60}")
     print(f"✅ Inference complete!")
