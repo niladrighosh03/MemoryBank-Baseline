@@ -1,11 +1,11 @@
 """
-Memory Retrieval using MiniLM + FAISS
-=====================================
+Memory Retrieval using BERT-base-uncased + FAISS
+=================================================
 Mirrors MemoryBank-SiliconFriend/memory_bank/memory_retrieval/local_doc_qa.py
 but uses raw HuggingFace transformers (AutoModel + AutoTokenizer) for
-MiniLM embeddings + FAISS.
+BERT-base-uncased embeddings + FAISS (no sentence-transformers needed).
 
-Class: MemoryRetrieval
+Class: BERTMemoryRetrieval
   - build_and_save_index(persona_id, memory_docs, index_dir)
   - load_index(persona_id, index_dir) → (faiss_index, texts, dates, memory_ids)
   - search(query, faiss_index, texts, dates, top_k=3) → List[(text, date)]
@@ -23,7 +23,7 @@ from transformers import AutoTokenizer, AutoModel
 # CONFIGURATION
 # ─────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "bert-base-uncased"
 DEFAULT_INDEX_DIR = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 TOP_K = 3
 BATCH_SIZE = 16
@@ -39,16 +39,17 @@ def mean_pool(token_embeddings, attention_mask):
     return sum_embeddings / sum_mask
 
 
-class MemoryRetrieval:
+class BERTMemoryRetrieval:
     """
-    MiniLM + FAISS memory retrieval using raw HuggingFace transformers.
+    BERT-base-uncased + FAISS memory retrieval using raw HuggingFace transformers.
+    Avoids sentence-transformers to skip Keras / TF import conflicts.
     """
 
     def __init__(self, model_name=EMBEDDING_MODEL, device=None):
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
-        print(f"Loading embedding model: {model_name} on {device} ...")
+        print(f"Loading BERT embedding model: {model_name} on {device} ...")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name).to(device)
         self.model.eval()
@@ -56,7 +57,7 @@ class MemoryRetrieval:
 
     def _embed(self, texts):
         """
-        Embed a list of strings using MiniLM mean-pooling.
+        Embed a list of strings using BERT mean-pooling.
         Returns np.ndarray of shape (N, hidden_dim), L2-normalized.
         """
         all_embeddings = []
@@ -248,10 +249,6 @@ class MemoryRetrieval:
         return results
 
 
-# Backward-compatible alias for older imports.
-BERTMemoryRetrieval = MemoryRetrieval
-
-
 # ─────────────────────────────────────────────
 # Helper: build memory_docs from memory.json
 # ─────────────────────────────────────────────
@@ -297,7 +294,7 @@ if __name__ == "__main__":
     with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         memory_dict = json.load(f)
 
-    retriever = MemoryRetrieval()
+    retriever = BERTMemoryRetrieval()
 
     pid = list(memory_dict.keys())[0]
     docs = build_memory_docs(memory_dict[pid], pid)

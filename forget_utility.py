@@ -25,7 +25,6 @@ Usage in run_inference.py:
 import math
 import datetime
 import json
-import random
 
 
 # ─────────────────────────────────────────────
@@ -193,7 +192,7 @@ class MemoryForgetter:
                     S = entry.get("memory_strength", 1)
                     retention = forgetting_curve(t, S)
 
-                    if random.random() > retention:
+                    if retention < self.retention_threshold:
                         forget_indices.append(i)
                         print(f"  [FORGET] {pid} | {date}[{i}] | "
                               f"t={t}d S={S} R={retention:.3f} → FORGOTTEN")
@@ -223,7 +222,7 @@ class MemoryForgetter:
                 S = summary_entry.get("memory_strength", 1)
                 retention = forgetting_curve(t, S)
 
-                if random.random() > retention:
+                if retention < self.retention_threshold:
                     del summary[date]
                     print(f"  [FORGET] {pid} | summary[{date}] | "
                           f"t={t}d S={S} R={retention:.3f} → FORGOTTEN")

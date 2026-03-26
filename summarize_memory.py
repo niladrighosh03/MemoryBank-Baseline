@@ -82,7 +82,7 @@ SYSTEM_SUMMARIZER = (
 def build_event_summary_prompt(date, qa_pairs, user_name="User", agent_name="Agent"):
     """Prompt to summarize what happened in a conversation on a given date."""
     prompt = (
-        f"Please summarize the following insurance conversation on {date} as concisely "
+        f"Please summarize the following conversation on {date} as concisely "
         f"as possible. Extract the main topics discussed and key outcomes. "
         f"If there are multiple key events, summarize them separately.\n\n"
         f"Conversation on {date}:\n"
@@ -97,7 +97,7 @@ def build_event_summary_prompt(date, qa_pairs, user_name="User", agent_name="Age
 def build_personality_prompt(date, qa_pairs, user_name="User", agent_name="Agent"):
     """Prompt to infer user personality from a conversation."""
     prompt = (
-        f"Based on the following insurance conversation on {date}, "
+        f"Based on the following conversation on {date}, "
         f"please summarize the user's personality traits, preferences, "
         f"and the most appropriate response strategy for the agent.\n\n"
         f"Conversation:\n"
@@ -113,7 +113,7 @@ def build_overall_history_prompt(summaries):
     """Prompt to create an overall history from per-date summaries."""
     prompt = (
         "Please provide a highly concise summary of the following events across "
-        "multiple insurance conversations. Capture essential key information:\n\n"
+        "multiple conversations. Capture essential key information:\n\n"
     )
     for date, summary_dict in summaries:
         content = summary_dict["content"]
@@ -125,7 +125,7 @@ def build_overall_history_prompt(summaries):
 def build_overall_personality_prompt(personalities):
     """Prompt to create an overall personality profile from per-date entries."""
     prompt = (
-        "The following are the user's personality traits and insurance preferences "
+        "The following are the user's personality traits and preferences "
         "across multiple conversations:\n\n"
     )
     for date, personality_text in personalities:

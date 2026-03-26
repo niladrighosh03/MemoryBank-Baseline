@@ -2,7 +2,7 @@
 Step 5: Run MemoryBank Inference using Qwen 2.5 3B Instruct
 ============================================================
 Mirrors MemoryBank-SiliconFriend/SiliconFriend-ChatGPT/cli_llamaindex.py but with:
-  - BERT-base-uncased + FAISS for memory retrieval  (instead of LlamaIndex)
+  - MiniLM + FAISS for memory retrieval             (instead of LlamaIndex)
   - Qwen 2.5 3B Instruct for response generation    (instead of OpenAI GPT)
   - (Optional) Ebbinghaus Forgetting Curve memory management via --enable_forgetting
 
@@ -50,7 +50,7 @@ import torch
 import argparse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
+from memory_retrieval import MemoryRetrieval, build_memory_docs
 from forget_utility import MemoryForgetter
 from summarize_memory import (
     SYSTEM_SUMMARIZER,
@@ -120,7 +120,7 @@ OUTPUT_DIR     = os.path.join(SCRIPT_DIR, "output")
 OUTPUT_FILE    = os.path.join(OUTPUT_DIR, "inference_results.json")
 
 QWEN_MODEL     = "Qwen/Qwen2.5-3B-Instruct"
-EMBEDDING_MODEL= "bert-base-uncased"
+EMBEDDING_MODEL= "sentence-transformers/all-MiniLM-L6-v2"
 TOP_K          = 3
 MAX_NEW_TOKENS = 400
 # ─────────────────────────────────────────────
@@ -130,7 +130,7 @@ MAX_NEW_TOKENS = 400
 # Mirrors MemoryBank-SiliconFriend/utils/prompt_utils.py's meta_prompt
 
 SYSTEM_PROMPT_WITH_MEMORY = """\
-You are a professional insurance sales agent. You assist users in finding the best insurance.
+You are a professional sales agent. You assist users in finding the best insurance.
 
 You have access to this user's past interaction history:
 
@@ -149,7 +149,7 @@ personalized, and empathetic insurance recommendation. Refer to past context whe
 """
 
 SYSTEM_PROMPT_NO_MEMORY = """\
-You are a professional insurance sales agent. You assist users in finding the \
+You are a professional sales agent. You assist users in finding the \
 best insurance policies based on their needs and budget.
 Provide a helpful, personalized, and empathetic insurance recommendation.\
 """
@@ -529,7 +529,7 @@ def main():
     print(f"\nRunning inference for personas: {personas}")
 
     # ── Load models ─────────────────────────────────────────────────
-    retriever = BERTMemoryRetrieval(model_name=EMBEDDING_MODEL)
+    retriever = MemoryRetrieval(model_name=EMBEDDING_MODEL)
     model, tokenizer = load_qwen_model()
 
     # ── Initialise MemoryForgetter if enabled ───────────────────────

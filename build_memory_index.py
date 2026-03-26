@@ -1,8 +1,8 @@
 """
-Step 3: Build BERT + FAISS Memory Index for all personas
-=========================================================
+Step 3: Build MiniLM + FAISS Memory Index for all personas
+===========================================================
 Mirrors MemoryBank-SiliconFriend/memory_bank/build_memory_index.py but uses
-BERT-base-uncased + FAISS (via memory_retrieval.py) instead of LlamaIndex.
+MiniLM + FAISS (via memory_retrieval.py) instead of LlamaIndex.
 
 Run this AFTER:
   1. convert_to_memorybank_format.py   → memory.json exists
@@ -10,7 +10,7 @@ Run this AFTER:
 
 For each persona in memory.json:
   - Converts history + summaries into memory document chunks
-  - Embeds all chunks using BERT-base-uncased
+  - Embeds all chunks using MiniLM
   - Builds a FAISS IndexFlatIP (cosine similarity)
   - Saves index to memory_bank/faiss_index/<persona_id>/
 
@@ -23,7 +23,7 @@ import json
 import os
 import argparse
 
-from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
+from memory_retrieval import MemoryRetrieval, build_memory_docs
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -31,12 +31,12 @@ from memory_retrieval import BERTMemoryRetrieval, build_memory_docs
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
 INDEX_DIR   = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
-EMBEDDING_MODEL = "bert-base-uncased"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 # ─────────────────────────────────────────────
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build BERT+FAISS memory index")
+    parser = argparse.ArgumentParser(description="Build MiniLM+FAISS memory index")
     parser.add_argument("--persona_id", type=str, default=None,
                         help="Build index only for this persona. Default: all.")
     parser.add_argument("--memory_file", type=str, default=MEMORY_FILE)
@@ -51,8 +51,8 @@ def main():
     personas = [args.persona_id] if args.persona_id else list(memory_dict.keys())
     print(f"Building FAISS index for personas: {personas}")
 
-    # ── Initialize retriever (loads BERT model once) ────────────────
-    retriever = BERTMemoryRetrieval(model_name=EMBEDDING_MODEL)
+    # ── Initialize retriever (loads embedding model once) ───────────
+    retriever = MemoryRetrieval(model_name=EMBEDDING_MODEL)
 
     # ── Build index per persona ──────────────────────────────────────
     for pid in personas:

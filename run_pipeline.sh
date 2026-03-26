@@ -23,7 +23,7 @@ LOG_FILE="output/output.log"
 {
 echo "============================================================"
 echo "  MemoryBank Baseline Pipeline"
-echo "  Model: BERT-base-uncased (embeddings) + Qwen 2.5 3B (LLM)"
+echo "  Model: all-MiniLM-L6-v2 (embeddings) + Qwen 2.5 3B (LLM)"
 echo "  Dataset: 100% History & Inference Overlap"
 echo "  Logs saved to: $LOG_FILE"
 echo "============================================================"
@@ -41,8 +41,8 @@ echo "[Step 2/5] Summarizing memory with Qwen 2.5 3B ..."
 python summarize_memory.py
 echo ""
 
-# ── Step 3: Build BERT + FAISS index ─────────────────────────
-echo "[Step 3/5] Building BERT+FAISS memory index ..."
+# ── Step 3: Build MiniLM + FAISS index ───────────────────────
+echo "[Step 3/5] Building MiniLM+FAISS memory index ..."
 python build_memory_index.py
 echo ""
 
