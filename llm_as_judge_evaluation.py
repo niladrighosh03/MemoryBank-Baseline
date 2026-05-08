@@ -11,6 +11,7 @@ Usage:
 import csv
 import os
 import time
+import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -126,10 +127,21 @@ def judge_response(history: list[dict], user_message: str, agent_response: str) 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser(description="LLM-as-judge evaluation for MemoryBank outputs")
+    parser.add_argument("--eval_csv", type=str, default=str(EVAL_CSV),
+                        help="Path to evaluation.csv")
+    parser.add_argument("--output_csv", type=str, default=str(OUTPUT_CSV),
+                        help="Path to evaluation_judge.csv")
+    args = parser.parse_args()
+
+    eval_csv = Path(args.eval_csv)
+    output_csv = Path(args.output_csv)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+
     # ── 1. Load evaluation.csv ─────────────────────────────────────────────
-    print(f"Loading  {EVAL_CSV} …")
-    print(f"Output → {OUTPUT_CSV}")
-    with open(EVAL_CSV, newline="", encoding="utf-8") as f:
+    print(f"Loading  {eval_csv} …")
+    print(f"Output → {output_csv}")
+    with open(eval_csv, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         eval_fieldnames = reader.fieldnames or []
         eval_rows = list(reader)
@@ -184,8 +196,8 @@ def main():
                 failed += 1
 
     # ── 4. Write results to evaluation_judge.csv (original is never touched) ──
-    print(f"\nWriting scores to {OUTPUT_CSV} …")
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    print(f"\nWriting scores to {output_csv} …")
+    with open(output_csv, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=eval_fieldnames)
         writer.writeheader()
         writer.writerows(eval_rows)
@@ -208,7 +220,7 @@ def main():
             count = all_scores.count(s)
             pct   = count / len(all_scores) * 100
             print(f"    {s}: {count:4d}  ({pct:.1f}%)")
-    print(f"Results saved to: {OUTPUT_CSV}")
+    print(f"Results saved to: {output_csv}")
 
 
 if __name__ == "__main__":

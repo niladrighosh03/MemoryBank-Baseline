@@ -1,9 +1,9 @@
 """
-Step 5: Run MemoryBank Inference using Qwen 2.5 3B Instruct
-============================================================
+Step 5: Run MemoryBank Inference using a configurable chat model
+================================================================
 Mirrors MemoryBank-SiliconFriend/SiliconFriend-ChatGPT/cli_llamaindex.py but with:
   - MiniLM + FAISS for memory retrieval             (instead of LlamaIndex)
-  - Qwen 2.5 3B Instruct for response generation    (instead of OpenAI GPT)
+  - A configurable local or OpenAI-compatible chat model for response generation
   - (Optional) Ebbinghaus Forgetting Curve memory management via --enable_forgetting
 
 For each persona's QUERY conversations (from query_set.json):
@@ -14,7 +14,7 @@ For each persona's QUERY conversations (from query_set.json):
          - overall_history     (past summaries strictly before the conversation date)
          - overall_personality (user traits + recommended agent strategy)
          - retrieved_memories  (specific relevant past interactions)
-    3. Generates the next agent response using Qwen 2.5 3B
+    3. Generates the next agent response using the configured chat backend
   - Saves results to output/inference_results.json
 
 CLI:
@@ -35,7 +35,7 @@ Output format (inference_results.json):
           "user_query": "User utterance...",
           "ground_truth_response": "Actual agent response...",
           "retrieved_memories": [{"text": ..., "date": ..., "score": ...}],
-          "generated_response": "Qwen-generated agent response..."
+          "generated_response": "Generated agent response..."
         },
         ...
       ]
@@ -46,10 +46,15 @@ Output format (inference_results.json):
 
 import json
 import os
-import torch
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from llm_backend import (
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_OPENAI_MODEL,
+    DEFAULT_OPENAI_TEMPERATURE,
+    DEFAULT_QWEN_MODEL,
+    load_chat_backend,
+)
 from memory_retrieval import MemoryRetrieval, build_memory_docs
 from forget_utility import MemoryForgetter
 from summarize_memory import (
@@ -119,7 +124,7 @@ INDEX_DIR      = os.path.join(SCRIPT_DIR, "memory_bank", "faiss_index")
 OUTPUT_DIR     = os.path.join(SCRIPT_DIR, "output")
 OUTPUT_FILE    = os.path.join(OUTPUT_DIR, "inference_results.json")
 
-QWEN_MODEL     = "Qwen/Qwen2.5-3B-Instruct"
+QWEN_MODEL     = DEFAULT_QWEN_MODEL
 EMBEDDING_MODEL= "sentence-transformers/all-MiniLM-L6-v2"
 TOP_K          = 3
 MAX_NEW_TOKENS = 400
@@ -154,42 +159,6 @@ best insurance policies based on their needs and budget.
 Provide a helpful, personalized, and empathetic insurance recommendation.\
 """
 
-
-def load_qwen_model(model_name=QWEN_MODEL):
-    print(f"Loading Qwen model: {model_name} ...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="auto",
-        torch_dtype=torch.float16,
-        trust_remote_code=True
-    )
-    model.eval()
-    print("  Model loaded.\n")
-    return model, tokenizer
-
-
-def qwen_generate(model, tokenizer, system_msg, user_msg, max_new_tokens=MAX_NEW_TOKENS):
-    messages = [
-        {"role": "system", "content": system_msg},
-        {"role": "user",   "content": user_msg}
-    ]
-    text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-    inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=None,
-            top_p=None
-        )
-    new_tokens = output_ids[0][len(inputs.input_ids[0]):]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-
-
 def format_retrieved_memories(retrieved):
     """Format retrieved memory list into a readable string for the prompt."""
     if not retrieved:
@@ -201,7 +170,7 @@ def format_retrieved_memories(retrieved):
     return "\n".join(lines)
 
 
-def build_temporal_memory_context(persona_mem, cur_date, model, tokenizer):
+def build_temporal_memory_context(persona_mem, cur_date, llm):
     """
     Build date-consistent global summaries using ONLY memory strictly before cur_date.
     """
@@ -222,26 +191,24 @@ def build_temporal_memory_context(persona_mem, cur_date, model, tokenizer):
 
     overall_history = "No prior conversation history available."
     if past_summaries:
-        overall_history = qwen_generate(
-            model,
-            tokenizer,
+        overall_history = llm.generate(
             SYSTEM_SUMMARIZER,
             build_overall_history_prompt(past_summaries),
+            max_new_tokens=MAX_NEW_TOKENS,
         )
 
     overall_personality = "No personality profile available."
     if past_personalities:
-        overall_personality = qwen_generate(
-            model,
-            tokenizer,
+        overall_personality = llm.generate(
             SYSTEM_SUMMARIZER,
             build_overall_personality_prompt(past_personalities),
+            max_new_tokens=MAX_NEW_TOKENS,
         )
 
     return overall_history, overall_personality
 
 
-def update_memory_with_generated_conversation(persona_mem, pid, date, turn_results, model, tokenizer):
+def update_memory_with_generated_conversation(persona_mem, pid, date, turn_results, llm):
     """
     Add generated conversation turns to memory storage and regenerate the date summary/profile.
     """
@@ -267,22 +234,20 @@ def update_memory_with_generated_conversation(persona_mem, pid, date, turn_resul
     date_history.extend(new_entries)
 
     persona_mem["summary"][date] = {
-        "content": qwen_generate(
-            model,
-            tokenizer,
+        "content": llm.generate(
             SYSTEM_SUMMARIZER,
             build_event_summary_prompt(date, date_history),
+            max_new_tokens=MAX_NEW_TOKENS,
         ),
         "memory_strength": 1,
         "last_recall_date": date,
         "memory_id": f"{pid}_{date}_summary",
     }
 
-    persona_mem["personality"][date] = qwen_generate(
-        model,
-        tokenizer,
+    persona_mem["personality"][date] = llm.generate(
         SYSTEM_SUMMARIZER,
         build_personality_prompt(date, date_history),
+        max_new_tokens=MAX_NEW_TOKENS,
     )
 
     summary_entry = persona_mem["summary"][date]
@@ -338,7 +303,7 @@ def get_all_qa_pairs(turns):
     return pairs
 
 
-def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, tokenizer,
+def run_inference_for_persona(pid, persona_mem, query_convs, retriever, llm,
                               top_k=TOP_K, forgetter: MemoryForgetter = None,
                               output_file: str = None, index_dir: str = INDEX_DIR):
     """
@@ -355,7 +320,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
     """
     # Load persona's FAISS index
     try:
-        faiss_index, texts, dates, memory_ids = retriever.load_index(pid)
+        faiss_index, texts, dates, memory_ids = retriever.load_index(pid, index_dir=index_dir)
         has_index = True
     except FileNotFoundError as e:
         print(f"  [WARNING] {e}")
@@ -402,8 +367,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
         overall_history, overall_personality = build_temporal_memory_context(
             current_persona_mem,
             date,
-            model,
-            tokenizer,
+            llm,
         )
 
         # ── Extract ALL User→Agent pairs from this conversation ──────
@@ -452,9 +416,9 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
             else:
                 system_prompt = SYSTEM_PROMPT_NO_MEMORY
 
-            # ── Generate response with Qwen ──────────────────────────
+            # ── Generate response with configured backend ────────────
             print(f"    Generating ...", end=" ", flush=True)
-            generated = qwen_generate(model, tokenizer, system_prompt, user_query)
+            generated = llm.generate(system_prompt, user_query, max_new_tokens=MAX_NEW_TOKENS)
             print(f"done. [{generated[:80]}...]")
 
             turn_results.append({
@@ -480,8 +444,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
             pid,
             date,
             turn_results,
-            model,
-            tokenizer,
+            llm,
         )
         pending_memory_docs.extend(new_memory_docs)
 
@@ -500,7 +463,7 @@ def run_inference_for_persona(pid, persona_mem, query_convs, retriever, model, t
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run MemoryBank inference with Qwen 2.5 3B")
+    parser = argparse.ArgumentParser(description="Run MemoryBank inference with a configurable chat backend")
     parser.add_argument("--persona_id", type=str, default=None,
                         help="Run only for this persona. Default: all.")
     parser.add_argument("--top_k", type=int, default=TOP_K)
@@ -508,13 +471,25 @@ def main():
     parser.add_argument("--query_file",  type=str, default=QUERY_FILE)
     parser.add_argument("--index_dir",   type=str, default=INDEX_DIR)
     parser.add_argument("--output_file", type=str, default=OUTPUT_FILE)
+    parser.add_argument("--backend", type=str, choices=["qwen", "openai"], default="qwen",
+                        help="Generation backend to use during inference.")
+    parser.add_argument("--model_name", type=str, default=None,
+                        help=f"Model name to use. Defaults: qwen={DEFAULT_QWEN_MODEL}, openai={DEFAULT_OPENAI_MODEL}")
+    parser.add_argument("--api_key", type=str, default=None,
+                        help="API key for the OpenAI-compatible backend. Defaults to OPENAI_API_KEY.")
+    parser.add_argument("--base_url", type=str, default=DEFAULT_OPENAI_BASE_URL,
+                        help="Base URL for the OpenAI-compatible backend.")
+    parser.add_argument("--temperature", type=float, default=DEFAULT_OPENAI_TEMPERATURE,
+                        help="Sampling temperature for the OpenAI-compatible backend.")
+    parser.add_argument("--enable_thinking", action="store_true", default=False,
+                        help="Enable provider-side thinking mode when supported.")
     parser.add_argument("--enable_forgetting", action="store_true", default=False,
                         help="Apply Ebbinghaus Forgetting Curve during inference. "
                              "Weaker/older memories will be deterministically removed, "
                              "and retrieved memories will be reinforced.")
     args = parser.parse_args()
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
     # ── Load memory + query data ─────────────────────────────────────
     print(f"Loading memory: {args.memory_file}")
@@ -530,7 +505,14 @@ def main():
 
     # ── Load models ─────────────────────────────────────────────────
     retriever = MemoryRetrieval(model_name=EMBEDDING_MODEL)
-    model, tokenizer = load_qwen_model()
+    llm = load_chat_backend(
+        backend=args.backend,
+        model_name=args.model_name if args.model_name else None,
+        api_key=args.api_key,
+        base_url=args.base_url,
+        temperature=args.temperature,
+        enable_thinking=args.enable_thinking,
+    )
 
     # ── Initialise MemoryForgetter if enabled ───────────────────────
     forgetter = None
@@ -563,8 +545,7 @@ def main():
             memory_dict[pid],
             sorted_query_convs,
             retriever,
-            model,
-            tokenizer,
+            llm,
             top_k=args.top_k,
             forgetter=forgetter,       # None if forgetting is disabled
             output_file=args.output_file,  # write after each conversation

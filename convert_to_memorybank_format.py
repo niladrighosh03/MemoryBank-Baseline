@@ -39,6 +39,7 @@ Query split (for inference) is saved separately to query_set.json:
 
 import json
 import os
+import argparse
 from collections import defaultdict
 from datetime import datetime
 
@@ -101,11 +102,26 @@ def personality_to_text(conv):
 
 
 def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    parser = argparse.ArgumentParser(description="Convert sorted conversations into MemoryBank format")
+    parser.add_argument("--input_file", type=str, default=INPUT_FILE,
+                        help="Path to sorted_conversations.json")
+    parser.add_argument("--output_dir", type=str, default=OUTPUT_DIR,
+                        help="Directory where memory.json and query_set.json will be written.")
+    parser.add_argument("--memory_file", type=str, default=None,
+                        help="Optional explicit path for memory.json")
+    parser.add_argument("--query_file", type=str, default=None,
+                        help="Optional explicit path for query_set.json")
+    args = parser.parse_args()
+
+    output_dir = args.output_dir
+    memory_file = args.memory_file or os.path.join(output_dir, "memory.json")
+    query_file = args.query_file or os.path.join(output_dir, "query_set.json")
+
+    os.makedirs(output_dir, exist_ok=True)
 
     # ── Load data ──────────────────────────────────────────
-    print(f"Loading {INPUT_FILE} ...")
-    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    print(f"Loading {args.input_file} ...")
+    with open(args.input_file, "r", encoding="utf-8") as f:
         all_convs = json.load(f)
     print(f"  Loaded {len(all_convs)} conversations total.")
 
@@ -196,17 +212,17 @@ def main():
         query_dict[persona_id] = query_items
 
     # ── Save outputs ───────────────────────────────────────
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+    with open(memory_file, "w", encoding="utf-8") as f:
         json.dump(memory_dict, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Saved memory.json → {MEMORY_FILE}")
+    print(f"\n✅ Saved memory.json → {memory_file}")
     print(f"   Personas in memory: {list(memory_dict.keys())}")
     for pid, pmem in memory_dict.items():
         print(f"   {pid}: {len(pmem['history'])} history dates, "
               f"{len(pmem['summary'])} pre-seeded summaries")
 
-    with open(QUERY_FILE, "w", encoding="utf-8") as f:
+    with open(query_file, "w", encoding="utf-8") as f:
         json.dump(query_dict, f, indent=2, ensure_ascii=False)
-    print(f"\n✅ Saved query_set.json → {QUERY_FILE}")
+    print(f"\n✅ Saved query_set.json → {query_file}")
     for pid, qitems in query_dict.items():
         print(f"   {pid}: {len(qitems)} query conversations")
 

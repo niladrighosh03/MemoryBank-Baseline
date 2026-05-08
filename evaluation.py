@@ -1,4 +1,6 @@
 # %%
+import argparse
+import os
 import pandas as pd
 import torch
 import math
@@ -7,10 +9,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from rouge_score import rouge_scorer
-from datetime import datetime
 from bert_score import score
-
-import os
 
 MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -91,14 +90,30 @@ def compute_meteor(reference, hypothesis, alpha=0.5):
 # --- Main Execution ---
 
 def main():
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype="auto",
-        device_map="auto"
-    )
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    parser = argparse.ArgumentParser(description="Evaluate MemoryBank generations")
+    parser.add_argument("--input_csv", type=str, default=INPUT_CSV_PATH,
+                        help="Path to inference_results.csv")
+    parser.add_argument("--output_csv", type=str, default=OUTPUT_CSV_PATH,
+                        help="Path to evaluation.csv")
+    parser.add_argument("--ppl_model_name", type=str, default=MODEL_NAME,
+                        help="Local HuggingFace model used for perplexity.")
+    parser.add_argument("--skip_ppl", action="store_true", default=False,
+                        help="Skip perplexity computation. Useful for remote-model runs.")
+    args = parser.parse_args()
 
-    df = pd.read_csv(INPUT_CSV_PATH)
+    os.makedirs(os.path.dirname(args.output_csv), exist_ok=True)
+
+    model = None
+    tokenizer = None
+    if not args.skip_ppl:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.ppl_model_name,
+            torch_dtype="auto",
+            device_map="auto"
+        )
+        tokenizer = AutoTokenizer.from_pretrained(args.ppl_model_name)
+
+    df = pd.read_csv(args.input_csv)
 
     df['PPL'] = 0.0
     df['BLEU-2'] = 0.0
@@ -107,8 +122,6 @@ def main():
     df['ROUGE-1'] = 0.0
     df['METEOR'] = 0.0
 
-    start_time = datetime.now()
-
     for i in range(len(df)):
         agent_reply = str(df.loc[i, 'ground response'])
         model_reply = str(df.loc[i, 'generated response'])
@@ -116,7 +129,10 @@ def main():
         if not model_reply.strip():
             continue
 
-        df.loc[i, 'PPL'] = calculate_perplexity(model_reply, model, tokenizer)
+        if not args.skip_ppl:
+            df.loc[i, 'PPL'] = calculate_perplexity(model_reply, model, tokenizer)
+        else:
+            df.loc[i, 'PPL'] = np.nan
         df.loc[i, 'BLEU-2'] = compute_bleu2(model_reply, agent_reply)
         df.loc[i, 'BERTScore-F1'] = compute_bert_score_f1([model_reply], [agent_reply])
         df.loc[i, 'Distinct-2'] = distinct_2(model_reply)
@@ -128,11 +144,11 @@ def main():
             df.loc[i, 'METEOR'] = np.nan
 
         # Save progressively on the go
-        df.to_csv(OUTPUT_CSV_PATH, index=False)
+        df.to_csv(args.output_csv, index=False)
         
         # Optional: Print progress every 100 turns
         if (i + 1) % 100 == 0:
-            print(f"Processed {i+1}/{len(df)} turns. Saved to {OUTPUT_CSV_PATH}")
+            print(f"Processed {i+1}/{len(df)} turns. Saved to {args.output_csv}")
 
     # ---- FINAL AVERAGES (ONLY PRINT) ----
     print("\nAverage Metrics")
@@ -149,6 +165,5 @@ if __name__ == "__main__":
 
 
 # %%
-
 
 

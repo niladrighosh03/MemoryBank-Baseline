@@ -1,19 +1,29 @@
 import json
 import csv
 import os
+import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_JSON = os.path.join(SCRIPT_DIR, "output", "inference_results.json")
 OUTPUT_CSV = os.path.join(SCRIPT_DIR, "output", "inference_results.csv")
 
 def main():
-    if not os.path.exists(INPUT_JSON):
-        print(f"Error: Could not find input file: {INPUT_JSON}")
+    parser = argparse.ArgumentParser(description="Convert inference JSON output to CSV")
+    parser.add_argument("--input_json", type=str, default=INPUT_JSON,
+                        help="Path to inference_results.json")
+    parser.add_argument("--output_csv", type=str, default=OUTPUT_CSV,
+                        help="Path to output CSV")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.input_json):
+        print(f"Error: Could not find input file: {args.input_json}")
         print("Make sure the inference pipeline has finished running.")
         return
 
-    print(f"Loading JSON from {INPUT_JSON} ...")
-    with open(INPUT_JSON, "r", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(args.output_csv), exist_ok=True)
+
+    print(f"Loading JSON from {args.input_json} ...")
+    with open(args.input_json, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # Prepare CSV headers
@@ -27,8 +37,8 @@ def main():
         "generated response"
     ]
 
-    print(f"Writing to CSV: {OUTPUT_CSV} ...")
-    with open(OUTPUT_CSV, "w", encoding="utf-8", newline="") as f:
+    print(f"Writing to CSV: {args.output_csv} ...")
+    with open(args.output_csv, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(headers)
 
@@ -59,7 +69,7 @@ def main():
                     ])
                     row_count += 1
                     
-    print(f"Done! Extracted {row_count} total turns into {OUTPUT_CSV}.")
+    print(f"Done! Extracted {row_count} total turns into {args.output_csv}.")
 
 if __name__ == "__main__":
     main()

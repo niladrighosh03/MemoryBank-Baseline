@@ -1,8 +1,8 @@
 """
-Step 2: Summarize Memory using Qwen 2.5 3B Instruct
-=====================================================
-Mirrors MemoryBank-SiliconFriend/memory_bank/summarize_memory.py but uses
-Qwen 2.5 3B Instruct (local HuggingFace) instead of OpenAI GPT.
+Step 2: Summarize Memory using a configurable chat model
+========================================================
+Mirrors MemoryBank-SiliconFriend/memory_bank/summarize_memory.py but supports
+either a local HuggingFace model or an OpenAI-compatible chat endpoint.
 
 For each persona, for each date in memory.history:
   - If summary is missing → generate event/topic summary
@@ -19,57 +19,26 @@ Set FORCE_RESUMMARY = True to overwrite even pre-seeded entries.
 
 import json
 import os
-import torch
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from llm_backend import (
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_OPENAI_MODEL,
+    DEFAULT_OPENAI_TEMPERATURE,
+    DEFAULT_QWEN_MODEL,
+    load_chat_backend,
+)
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
 # ─────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory_bank", "memory.json")
-MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
+MODEL_NAME = DEFAULT_QWEN_MODEL
 MAX_NEW_TOKENS_SUMMARY = 300
 MAX_NEW_TOKENS_OVERALL = 400
 FORCE_RESUMMARY = False  # Set True to overwrite pre-seeded summaries
 # ─────────────────────────────────────────────
-
-
-def load_qwen_model(model_name=MODEL_NAME):
-    print(f"Loading model: {model_name} ...")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="auto",
-        torch_dtype=torch.float16,
-        trust_remote_code=True
-    )
-    model.eval()
-    print("  Model loaded.")
-    return model, tokenizer
-
-
-def qwen_generate(model, tokenizer, system_msg, user_msg, max_new_tokens=300):
-    """Run Qwen inference with a system + user message."""
-    messages = [
-        {"role": "system", "content": system_msg},
-        {"role": "user",   "content": user_msg}
-    ]
-    text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
-    inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=None,
-            top_p=None
-        )
-    # Decode only the newly generated tokens
-    new_tokens = output_ids[0][len(inputs.input_ids[0]):]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 # ── Prompt builders (from MemoryBank-SiliconFriend prompt logic) ──────────────
@@ -139,10 +108,10 @@ def build_overall_personality_prompt(personalities):
 
 # ── Main summarization logic ─────────────────────────────────────────────────
 
-def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
+def summarize_memory(memory_dict, llm, persona_id=None):
     """
     For each persona (or a specific one if persona_id is given),
-    fill in missing summary/personality fields using Qwen.
+    fill in missing summary/personality fields using the configured backend.
     """
     for pid, persona_mem in memory_dict.items():
         if persona_id and pid != persona_id:
@@ -176,9 +145,10 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
             else:
                 print(f"  [{date}] Generating event summary ...", end=" ", flush=True)
                 prompt = build_event_summary_prompt(date, qa_pairs)
-                summary_text = qwen_generate(
-                    model, tokenizer, SYSTEM_SUMMARIZER, prompt,
-                    max_new_tokens=MAX_NEW_TOKENS_SUMMARY
+                summary_text = llm.generate(
+                    SYSTEM_SUMMARIZER,
+                    prompt,
+                    max_new_tokens=MAX_NEW_TOKENS_SUMMARY,
                 )
                 persona_mem["summary"][date] = {"content": summary_text}
                 print(f"done. [{summary_text[:80]}...]")
@@ -193,9 +163,10 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
             else:
                 print(f"  [{date}] Generating personality analysis ...", end=" ", flush=True)
                 prompt = build_personality_prompt(date, qa_pairs)
-                personality_text = qwen_generate(
-                    model, tokenizer, SYSTEM_SUMMARIZER, prompt,
-                    max_new_tokens=MAX_NEW_TOKENS_SUMMARY
+                personality_text = llm.generate(
+                    SYSTEM_SUMMARIZER,
+                    prompt,
+                    max_new_tokens=MAX_NEW_TOKENS_SUMMARY,
                 )
                 persona_mem["personality"][date] = personality_text
                 print(f"done. [{personality_text[:80]}...]")
@@ -204,9 +175,10 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
         print(f"\n  [{pid}] Generating overall_history ...", end=" ", flush=True)
         summary_items = list(persona_mem["summary"].items())
         overall_history_prompt = build_overall_history_prompt(summary_items)
-        persona_mem["overall_history"] = qwen_generate(
-            model, tokenizer, SYSTEM_SUMMARIZER, overall_history_prompt,
-            max_new_tokens=MAX_NEW_TOKENS_OVERALL
+        persona_mem["overall_history"] = llm.generate(
+            SYSTEM_SUMMARIZER,
+            overall_history_prompt,
+            max_new_tokens=MAX_NEW_TOKENS_OVERALL,
         )
         print(f"done.")
 
@@ -214,9 +186,10 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
         print(f"  [{pid}] Generating overall_personality ...", end=" ", flush=True)
         personality_items = list(persona_mem["personality"].items())
         overall_personality_prompt = build_overall_personality_prompt(personality_items)
-        persona_mem["overall_personality"] = qwen_generate(
-            model, tokenizer, SYSTEM_SUMMARIZER, overall_personality_prompt,
-            max_new_tokens=MAX_NEW_TOKENS_OVERALL
+        persona_mem["overall_personality"] = llm.generate(
+            SYSTEM_SUMMARIZER,
+            overall_personality_prompt,
+            max_new_tokens=MAX_NEW_TOKENS_OVERALL,
         )
         print(f"done.")
 
@@ -226,11 +199,23 @@ def summarize_memory(memory_dict, model, tokenizer, persona_id=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Summarize MemoryBank using Qwen 2.5 3B")
+    parser = argparse.ArgumentParser(description="Summarize MemoryBank with a configurable chat backend")
     parser.add_argument("--persona_id", type=str, default=None,
                         help="Process only this persona (e.g., P_001). Default: all.")
     parser.add_argument("--memory_file", type=str, default=MEMORY_FILE,
                         help="Path to memory.json")
+    parser.add_argument("--backend", type=str, choices=["qwen", "openai"], default="qwen",
+                        help="Generation backend to use for summarization.")
+    parser.add_argument("--model_name", type=str, default=None,
+                        help=f"Model name to use. Defaults: qwen={DEFAULT_QWEN_MODEL}, openai={DEFAULT_OPENAI_MODEL}")
+    parser.add_argument("--api_key", type=str, default=None,
+                        help="API key for the OpenAI-compatible backend. Defaults to OPENAI_API_KEY.")
+    parser.add_argument("--base_url", type=str, default=DEFAULT_OPENAI_BASE_URL,
+                        help="Base URL for the OpenAI-compatible backend.")
+    parser.add_argument("--temperature", type=float, default=DEFAULT_OPENAI_TEMPERATURE,
+                        help="Sampling temperature for the OpenAI-compatible backend.")
+    parser.add_argument("--enable_thinking", action="store_true", default=False,
+                        help="Enable provider-side thinking mode when supported.")
     args = parser.parse_args()
 
     # Load memory
@@ -240,10 +225,17 @@ def main():
     print(f"  Loaded {len(memory_dict)} personas: {list(memory_dict.keys())}")
 
     # Load model
-    model, tokenizer = load_qwen_model()
+    llm = load_chat_backend(
+        backend=args.backend,
+        model_name=args.model_name if args.model_name else None,
+        api_key=args.api_key,
+        base_url=args.base_url,
+        temperature=args.temperature,
+        enable_thinking=args.enable_thinking,
+    )
 
     # Summarize
-    memory_dict = summarize_memory(memory_dict, model, tokenizer, args.persona_id)
+    memory_dict = summarize_memory(memory_dict, llm, args.persona_id)
 
     # Save back
     with open(args.memory_file, "w", encoding="utf-8") as f:
